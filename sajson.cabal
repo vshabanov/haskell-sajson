@@ -30,6 +30,7 @@ library
   default-language:    Haskell2010
   include-dirs:        cbits
   c-sources:           cbits/sajson_wrapper.cpp
+                     , cbits/sajson_wrapper.h
   cc-options:          -Wall -O3 -march=native -std=c++11 -fomit-frame-pointer
   ghc-options:         -Wall -O2
   extra-libraries:     stdc++
