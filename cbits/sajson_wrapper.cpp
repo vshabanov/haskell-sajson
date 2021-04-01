@@ -1,4 +1,5 @@
 #include "sajson_wrapper.h"
+#define SAJSON_UNSORTED_OBJECT_KEYS
 #include "sajson.hpp"
 #include <stdlib.h>
 #include <type_traits>
