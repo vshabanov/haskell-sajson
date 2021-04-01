@@ -1,5 +1,5 @@
 name:                sajson
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Fast JSON parsing powered by Chad Austin's sajson library
 description:
     A fast JSON parsing library that is faster than aeson.
@@ -30,8 +30,8 @@ library
   default-language:    Haskell2010
   include-dirs:        cbits
   c-sources:           cbits/sajson_wrapper.cpp
-                     , cbits/sajson_wrapper.h
-  install-includes:    cbits/sajson.hpp
+  install-includes:    sajson_wrapper.h
+                     , sajson.hpp
   cc-options:          -Wall -O3 -march=native -std=c++11 -fomit-frame-pointer
   ghc-options:         -Wall -O2
   extra-libraries:     stdc++

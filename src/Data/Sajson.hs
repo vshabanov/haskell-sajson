@@ -114,8 +114,8 @@ foreign import ccall unsafe "sajson_wrapper.h sajson_get_error_column"
 foreign import ccall unsafe "sajson_wrapper.h sajson_get_error_message"
   c_sajson_get_error_message :: Ptr SajsonDocument -> IO CString
 
-foreign import ccall unsafe "sajson_wrapper.h sajson_get_root_type"
-  c_sajson_get_root_type :: Ptr SajsonDocument -> IO SajsonValueType
+foreign import ccall unsafe "sajson_wrapper.h sajson_get_root_tag"
+  c_sajson_get_root_tag :: Ptr SajsonDocument -> IO SajsonValueType
 
 foreign import ccall unsafe "sajson_wrapper.h sajson_get_root"
   c_sajson_get_root :: Ptr SajsonDocument -> IO SajsonValuePayload
@@ -133,7 +133,7 @@ doParse (ptr, size) =
   hasError <- c_sajson_has_error doc
   case hasError of
     0 -> Right <$> join (constructHaskellValue
-                         <$> c_sajson_get_root_type doc
+                         <$> c_sajson_get_root_tag doc
                          <*> c_sajson_get_root doc
                          <*> c_sajson_get_input doc)
     _ -> Left <$> (SajsonParseError

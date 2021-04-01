@@ -46,8 +46,8 @@ const char* sajson_get_error_message(sajson_document* doc) {
     return unwrap(doc)->get_error_message_as_cstring();
 }
 
-uint8_t sajson_get_root_type(sajson_document* doc) {
-    return unwrap(doc)->_internal_get_root_type();
+uint8_t sajson_get_root_tag(sajson_document* doc) {
+    return (uint8_t)unwrap(doc)->_internal_get_root_tag();
 }
 
 const size_t* sajson_get_root(sajson_document* doc) {

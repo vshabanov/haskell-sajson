@@ -138,8 +138,8 @@ constexpr inline size_t make_element(tag t, size_t value) {
 
 // This template utilizes the One Definition Rule to create global arrays in a
 // header. This trick courtesy of Rich Geldreich's Purple JSON parser.
-template <typename unused = void>
-struct globals_struct {
+// template <typename unused = void>
+// struct globals_struct {
 // clang-format off
 
     // bit 0 (1) - set if: plain ASCII string character
@@ -164,83 +164,19 @@ struct globals_struct {
     };
 
 // clang-format on
-};
-typedef globals_struct<> globals;
+// };
+// typedef globals_struct<> globals;
 
 constexpr inline bool is_plain_string_character(char c) {
     // return c >= 0x20 && c <= 0x7f && c != 0x22 && c != 0x5c;
-    return (globals::parse_flags[static_cast<unsigned char>(c)] & 1) != 0;
+    return (parse_flags[static_cast<unsigned char>(c)] & 1) != 0;
 }
 
 constexpr inline bool is_whitespace(char c) {
     // return c == '\r' || c == '\n' || c == '\t' || c == ' ';
-    return (globals::parse_flags[static_cast<unsigned char>(c)] & 2) != 0;
+    return (parse_flags[static_cast<unsigned char>(c)] & 2) != 0;
 }
 
-class allocated_buffer {
-public:
-    allocated_buffer()
-        : memory(0) {}
-
-    explicit allocated_buffer(size_t length) {
-        // throws std::bad_alloc upon allocation failure
-        void* buffer = operator new(sizeof(size_t) + length);
-        memory = static_cast<layout*>(buffer);
-        memory->refcount = 1;
-    }
-
-    allocated_buffer(const allocated_buffer& that)
-        : memory(that.memory) {
-        incref();
-    }
-
-    allocated_buffer(allocated_buffer&& that)
-        : memory(that.memory) {
-        that.memory = 0;
-    }
-
-    ~allocated_buffer() { decref(); }
-
-    allocated_buffer& operator=(const allocated_buffer& that) {
-        if (this != &that) {
-            decref();
-            memory = that.memory;
-            incref();
-        }
-        return *this;
-    }
-
-    allocated_buffer& operator=(allocated_buffer&& that) {
-        if (this != &that) {
-            decref();
-            memory = that.memory;
-            that.memory = 0;
-        }
-        return *this;
-    }
-
-    char* get_data() const { return memory ? memory->data : 0; }
-
-private:
-    void incref() const {
-        if (memory) {
-            ++(memory->refcount);
-        }
-    }
-
-    void decref() const {
-        if (memory && --(memory->refcount) == 0) {
-            operator delete(memory);
-        }
-    }
-
-    struct layout {
-        size_t refcount;
-        char data[];
-    };
-
-    layout* memory;
-};
 } // namespace internal
 
 /// A simple type encoding a pointer to some memory and a length (in bytes).
@@ -284,8 +220,7 @@ public:
     /// Creates an empty, zero-sized view.
     mutable_string_view()
         : length_(0)
-        , data(0)
-        , buffer() {}
+        , data(0) {}
 
     /// Given a length in bytes and a pointer, constructs a view
     /// that does not allocate a copy of the data or maintain its life.
@@ -293,63 +228,7 @@ public:
     /// resulting \ref document's life.
     mutable_string_view(size_t length, char* data_)
         : length_(length)
-        , data(data_)
-        , buffer() {}
-
-    /// Allocates a copy of the given \ref literal string and exposes a
-    /// mutable view into it.  Throws std::bad_alloc if allocation fails.
-    mutable_string_view(const literal& s)
-        : length_(s.length())
-        , buffer(length_) {
-        data = buffer.get_data();
-        memcpy(data, s.data(), length_);
-    }
-
-    /// Allocates a copy of the given \ref string and exposes a mutable view
-    /// into it.  Throws std::bad_alloc if allocation fails.
-    mutable_string_view(const string& s)
-        : length_(s.length())
-        , buffer(length_) {
-        data = buffer.get_data();
-        memcpy(data, s.data(), length_);
-    }
-
-    /// Copies a mutable_string_view.  If any backing memory has been
-    /// allocated, its refcount is incremented - both views can safely
-    /// use the memory.
-    mutable_string_view(const mutable_string_view& that)
-        : length_(that.length_)
-        , data(that.data)
-        , buffer(that.buffer) {}
-
-    /// Move constructor - neuters the old mutable_string_view.
-    mutable_string_view(mutable_string_view&& that)
-        : length_(that.length_)
-        , data(that.data)
-        , buffer(std::move(that.buffer)) {
-        that.length_ = 0;
-        that.data = 0;
-    }
-
-    mutable_string_view& operator=(mutable_string_view&& that) {
-        if (this != &that) {
-            length_ = that.length_;
-            data = that.data;
-            buffer = std::move(that.buffer);
-            that.length_ = 0;
-            that.data = 0;
-        }
-        return *this;
-    }
-
-    mutable_string_view& operator=(const mutable_string_view& that) {
-        if (this != &that) {
-            length_ = that.length_;
-            data = that.data;
-            buffer = that.buffer;
-        }
-        return *this;
-    }
+        , data(data_) {}
 
     size_t length() const { return length_; }
 
@@ -358,7 +237,6 @@ public:
 private:
     size_t length_;
     char* data;
-    internal::allocated_buffer buffer; // may not be allocated
 };
 
 namespace internal {
@@ -727,28 +605,6 @@ enum error {
 };
 
 namespace internal {
-class ownership {
-public:
-    ownership() = delete;
-    ownership(const ownership&) = delete;
-    void operator=(const ownership&) = delete;
-
-    explicit ownership(size_t* p_)
-        : p(p_) {}
-
-    ownership(ownership&& p_)
-        : p(p_.p) {
-        p_.p = 0;
-    }
-
-    ~ownership() { delete[] p; }
-
-    bool is_valid() const { return !!p; }
-
-private:
-    size_t* p;
-};
-
 inline const char* get_error_text(error error_code) {
     switch (error_code) {
     case ERROR_NO_ERROR:
@@ -821,7 +677,6 @@ public:
 
     document(document&& rhs)
         : input(rhs.input)
-        , structure(std::move(rhs.structure))
         , root_tag(rhs.root_tag)
         , root(rhs.root)
         , error_line(rhs.error_line)
@@ -904,11 +759,9 @@ private:
 
     explicit document(
         const mutable_string_view& input_,
-        internal::ownership&& structure_,
         tag root_tag_,
         const size_t* root_)
         : input(input_)
-        , structure(std::move(structure_))
         , root_tag(root_tag_)
         , root(root_)
         , error_line(0)
@@ -925,7 +778,6 @@ private:
         const error error_code_,
         int error_arg_)
         : input(input_)
-        , structure(0)
         , root_tag(tag::null)
         , root(0)
         , error_line(error_line_)
@@ -954,7 +806,6 @@ private:
     }
 
     mutable_string_view input;
-    internal::ownership structure;
     const tag root_tag;
     const size_t* const root;
     const size_t error_line;
@@ -1036,34 +887,26 @@ public:
         void operator=(const allocator&) = delete;
 
         explicit allocator(
-            size_t* buffer, size_t input_size, bool should_deallocate_)
+            size_t* buffer, size_t input_size)
             : structure(buffer)
             , structure_end(buffer ? buffer + input_size : 0)
-            , write_cursor(structure_end)
-            , should_deallocate(should_deallocate_) {}
+            , write_cursor(structure_end) {}
 
         explicit allocator(std::nullptr_t)
             : structure(0)
             , structure_end(0)
-            , write_cursor(0)
-            , should_deallocate(false) {}
+            , write_cursor(0) {}
 
         allocator(allocator&& other)
             : structure(other.structure)
             , structure_end(other.structure_end)
-            , write_cursor(other.write_cursor)
-            , should_deallocate(other.should_deallocate) {
+            , write_cursor(other.write_cursor) {
             other.structure = 0;
             other.structure_end = 0;
             other.write_cursor = 0;
-            other.should_deallocate = false;
         }
 
-        ~allocator() {
-            if (should_deallocate) {
-                delete[] structure;
-            }
-        }
+        ~allocator() = default;
 
         stack_head get_stack_head(bool* success) {
             *success = true;
@@ -1082,41 +925,30 @@ public:
 
         size_t* get_ast_root() { return write_cursor; }
 
-        internal::ownership transfer_ownership() {
-            auto p = structure;
+        void transfer_ownership() {
             structure = 0;
             structure_end = 0;
             write_cursor = 0;
-            if (should_deallocate) {
-                return internal::ownership(p);
-            } else {
-                return internal::ownership(0);
-            }
         }
 
     private:
         size_t* structure;
         size_t* structure_end;
         size_t* write_cursor;
-        bool should_deallocate;
     };
 
     /// \endcond
 
     /// Allocate a single worst-case AST buffer with one word per byte in
     /// the input document.
-    single_allocation()
-        : has_existing_buffer(false)
-        , existing_buffer(0)
-        , existing_buffer_size(0) {}
+    single_allocation() = delete;
 
     /// Write the AST into an existing buffer.  Will fail with an out of
     /// memory error if the buffer is not guaranteed to be big enough for
     /// the document.  The caller must guarantee the memory is valid for
     /// the duration of the parse and the AST traversal.
     single_allocation(size_t* existing_buffer_, size_t size_in_words)
-        : has_existing_buffer(true)
-        , existing_buffer(existing_buffer_)
+        : existing_buffer(existing_buffer_)
         , existing_buffer_size(size_in_words) {}
 
     /// Convenience wrapper for single_allocation(size_t*, size_t) that
@@ -1129,433 +961,12 @@ public:
 
     allocator
     make_allocator(size_t input_document_size_in_bytes, bool* succeeded) const {
-        if (has_existing_buffer) {
             if (existing_buffer_size < input_document_size_in_bytes) {
                 *succeeded = false;
                 return allocator(nullptr);
             }
             *succeeded = true;
-            return allocator(
-                existing_buffer, input_document_size_in_bytes, false);
-        } else {
-            size_t* buffer
-                = new (std::nothrow) size_t[input_document_size_in_bytes];
-            if (!buffer) {
-                *succeeded = false;
-                return allocator(nullptr);
-            }
-            *succeeded = true;
-            return allocator(buffer, input_document_size_in_bytes, true);
-        }
-    }
-
-    /// \endcond
-
-private:
-    bool has_existing_buffer;
-    size_t* existing_buffer;
-    size_t existing_buffer_size;
-};
-
-/// Allocation policy that uses dynamically-growing buffers for both the
-/// parse stack and the AST.  This allocation policy minimizes peak memory
-/// usage at the cost of some allocation and copying churn.
-class dynamic_allocation {
-public:
-    /// \cond INTERNAL
-
-    class stack_head {
-    public:
-        stack_head(stack_head&& other)
-            : stack_top(other.stack_top)
-            , stack_bottom(other.stack_bottom)
-            , stack_limit(other.stack_limit) {
-            other.stack_top = 0;
-            other.stack_bottom = 0;
-            other.stack_limit = 0;
-        }
-
-        ~stack_head() { delete[] stack_bottom; }
-
-        bool push(size_t element) {
-            if (can_grow(1)) {
-                *stack_top++ = element;
-                return true;
-            } else {
-                return false;
-            }
-        }
-
-        size_t* reserve(size_t amount, bool* success) {
-            if (can_grow(amount)) {
-                size_t* rv = stack_top;
-                stack_top += amount;
-                *success = true;
-                return rv;
-            } else {
-                *success = false;
-                return 0;
-            }
-        }
-
-        void reset(size_t new_top) { stack_top = stack_bottom + new_top; }
-
-        size_t get_size() { return stack_top - stack_bottom; }
-
-        size_t* get_top() { return stack_top; }
-
-        size_t* get_pointer_from_offset(size_t offset) {
-            return stack_bottom + offset;
-        }
-
-    private:
-        stack_head(const stack_head&) = delete;
-        void operator=(const stack_head&) = delete;
-
-        explicit stack_head(size_t initial_capacity, bool* success) {
-            assert(initial_capacity);
-            stack_bottom = new (std::nothrow) size_t[initial_capacity];
-            stack_top = stack_bottom;
-            if (stack_bottom) {
-                stack_limit = stack_bottom + initial_capacity;
-            } else {
-                stack_limit = 0;
-            }
-            *success = !!stack_bottom;
-        }
-
-        bool can_grow(size_t amount) {
-            if (SAJSON_LIKELY(
-                    amount <= static_cast<size_t>(stack_limit - stack_top))) {
-                return true;
-            }
-
-            size_t current_size = stack_top - stack_bottom;
-            size_t old_capacity = stack_limit - stack_bottom;
-            size_t new_capacity = old_capacity * 2;
-            while (new_capacity < amount + current_size) {
-                new_capacity *= 2;
-            }
-            size_t* new_stack = new (std::nothrow) size_t[new_capacity];
-            if (!new_stack) {
-                stack_top = 0;
-                stack_bottom = 0;
-                stack_limit = 0;
-                return false;
-            }
-
-            memcpy(new_stack, stack_bottom, current_size * sizeof(size_t));
-            delete[] stack_bottom;
-            stack_top = new_stack + current_size;
-            stack_bottom = new_stack;
-            stack_limit = stack_bottom + new_capacity;
-            return true;
-        }
-
-        size_t* stack_top; // stack grows up: stack_top >= stack_bottom
-        size_t* stack_bottom;
-        size_t* stack_limit;
-
-        friend class dynamic_allocation;
-    };
-
-    class allocator {
-    public:
-        allocator() = delete;
-        allocator(const allocator&) = delete;
-        void operator=(const allocator&) = delete;
-
-        explicit allocator(
-            size_t* buffer_,
-            size_t current_capacity,
-            size_t initial_stack_capacity_)
-            : ast_buffer_bottom(buffer_)
-            , ast_buffer_top(buffer_ + current_capacity)
-            , ast_write_head(ast_buffer_top)
-            , initial_stack_capacity(initial_stack_capacity_) {}
-
-        explicit allocator(std::nullptr_t)
-            : ast_buffer_bottom(0)
-            , ast_buffer_top(0)
-            , ast_write_head(0)
-            , initial_stack_capacity(0) {}
-
-        allocator(allocator&& other)
-            : ast_buffer_bottom(other.ast_buffer_bottom)
-            , ast_buffer_top(other.ast_buffer_top)
-            , ast_write_head(other.ast_write_head)
-            , initial_stack_capacity(other.initial_stack_capacity) {
-            other.ast_buffer_bottom = 0;
-            other.ast_buffer_top = 0;
-            other.ast_write_head = 0;
-        }
-
-        ~allocator() { delete[] ast_buffer_bottom; }
-
-        stack_head get_stack_head(bool* success) {
-            return stack_head(initial_stack_capacity, success);
-        }
-
-        size_t get_write_offset() { return ast_buffer_top - ast_write_head; }
-
-        size_t* get_write_pointer_of(size_t v) { return ast_buffer_top - v; }
-
-        size_t* reserve(size_t size, bool* success) {
-            if (can_grow(size)) {
-                ast_write_head -= size;
-                *success = true;
-                return ast_write_head;
-            } else {
-                *success = false;
-                return 0;
-            }
-        }
-
-        size_t* get_ast_root() { return ast_write_head; }
-
-        internal::ownership transfer_ownership() {
-            auto p = ast_buffer_bottom;
-            ast_buffer_bottom = 0;
-            ast_buffer_top = 0;
-            ast_write_head = 0;
-            return internal::ownership(p);
-        }
-
-    private:
-        bool can_grow(size_t amount) {
-            if (SAJSON_LIKELY(
-                    amount <= static_cast<size_t>(
-                                  ast_write_head - ast_buffer_bottom))) {
-                return true;
-            }
-            size_t current_capacity = ast_buffer_top - ast_buffer_bottom;
-
-            size_t current_size = ast_buffer_top - ast_write_head;
-            size_t new_capacity = current_capacity * 2;
-            while (new_capacity < amount + current_size) {
-                new_capacity *= 2;
-            }
-
-            size_t* old_buffer = ast_buffer_bottom;
-            size_t* new_buffer = new (std::nothrow) size_t[new_capacity];
-            if (!new_buffer) {
-                ast_buffer_bottom = 0;
-                ast_buffer_top = 0;
-                ast_write_head = 0;
-                return false;
-            }
-
-            size_t* old_write_head = ast_write_head;
-            ast_buffer_bottom = new_buffer;
-            ast_buffer_top = new_buffer + new_capacity;
-            ast_write_head = ast_buffer_top - current_size;
-            memcpy(
-                ast_write_head, old_write_head, current_size * sizeof(size_t));
-            delete[] old_buffer;
-
-            return true;
-        }
-
-        size_t*
-            ast_buffer_bottom; // base address of the ast buffer - it grows down
-        size_t* ast_buffer_top;
-        size_t* ast_write_head;
-        size_t initial_stack_capacity;
-    };
-
-    /// \endcond
-
-    /// Creates a dynamic_allocation policy with the given initial AST
-    /// and stack buffer sizes.
-    dynamic_allocation(
-        size_t initial_ast_capacity_ = 0, size_t initial_stack_capacity_ = 0)
-        : initial_ast_capacity(initial_ast_capacity_)
-        , initial_stack_capacity(initial_stack_capacity_) {}
-
-    /// \cond INTERNAL
-
-    allocator
-    make_allocator(size_t input_document_size_in_bytes, bool* succeeded) const {
-        size_t capacity = initial_ast_capacity;
-        if (!capacity) {
-            // TODO: guess based on input document size
-            capacity = 1024;
-        }
-
-        size_t* buffer = new (std::nothrow) size_t[capacity];
-        if (!buffer) {
-            *succeeded = false;
-            return allocator(nullptr);
-        }
-
-        size_t stack_capacity = initial_stack_capacity;
-        if (!stack_capacity) {
-            stack_capacity = 256;
-        }
-
-        *succeeded = true;
-        return allocator(buffer, capacity, stack_capacity);
-    }
-
-    /// \endcond
-
-private:
-    size_t initial_ast_capacity;
-    size_t initial_stack_capacity;
-};
-
-/// Allocation policy that attempts to fit the parsed AST into an existing
-/// memory buffer.  This allocation policy is useful when using sajson in
-/// a zero-allocation context or when there are constraints on the amount
-// of memory that can be used.
-class bounded_allocation {
-public:
-    /// \cond INTERNAL
-
-    class allocator;
-
-    class stack_head {
-    public:
-        stack_head(stack_head&& other)
-            : source_allocator(other.source_allocator) {
-            other.source_allocator = 0;
-        }
-
-        bool push(size_t element) {
-            if (SAJSON_LIKELY(source_allocator->can_grow(1))) {
-                *(source_allocator->stack_top)++ = element;
-                return true;
-            } else {
-                return false;
-            }
-        }
-
-        size_t* reserve(size_t amount, bool* success) {
-            if (SAJSON_LIKELY(source_allocator->can_grow(amount))) {
-                size_t* rv = source_allocator->stack_top;
-                source_allocator->stack_top += amount;
-                *success = true;
-                return rv;
-            } else {
-                *success = false;
-                return 0;
-            }
-        }
-
-        void reset(size_t new_top) {
-            source_allocator->stack_top = source_allocator->structure + new_top;
-        }
-
-        size_t get_size() {
-            return source_allocator->stack_top - source_allocator->structure;
-        }
-
-        size_t* get_top() { return source_allocator->stack_top; }
-
-        size_t* get_pointer_from_offset(size_t offset) {
-            return source_allocator->structure + offset;
-        }
-
-    private:
-        stack_head(const stack_head&) = delete;
-        void operator=(const stack_head&) = delete;
-
-        explicit stack_head(allocator* source_allocator_)
-            : source_allocator(source_allocator_) {}
-
-        allocator* source_allocator;
-
-        friend class bounded_allocation;
-    };
-
-    class allocator {
-    public:
-        allocator() = delete;
-        allocator(const allocator&) = delete;
-        void operator=(const allocator&) = delete;
-
-        explicit allocator(size_t* existing_buffer, size_t existing_buffer_size)
-            : structure(existing_buffer)
-            , structure_end(existing_buffer + existing_buffer_size)
-            , write_cursor(structure_end)
-            , stack_top(structure) {}
-
-        allocator(allocator&& other)
-            : structure(other.structure)
-            , structure_end(other.structure_end)
-            , write_cursor(other.write_cursor)
-            , stack_top(other.stack_top) {
-            other.structure = 0;
-            other.structure_end = 0;
-            other.write_cursor = 0;
-            other.stack_top = 0;
-        }
-
-        stack_head get_stack_head(bool* success) {
-            *success = true;
-            return stack_head(this);
-        }
-
-        size_t get_write_offset() { return structure_end - write_cursor; }
-
-        size_t* get_write_pointer_of(size_t v) { return structure_end - v; }
-
-        size_t* reserve(size_t size, bool* success) {
-            if (can_grow(size)) {
-                write_cursor -= size;
-                *success = true;
-                return write_cursor;
-            } else {
-                *success = false;
-                return 0;
-            }
-        }
-
-        size_t* get_ast_root() { return write_cursor; }
-
-        internal::ownership transfer_ownership() {
-            structure = 0;
-            structure_end = 0;
-            write_cursor = 0;
-            return internal::ownership(0);
-        }
-
-    private:
-        bool can_grow(size_t amount) {
-            // invariant: stack_top <= write_cursor
-            // thus: write_cursor - stack_top is positive
-            return static_cast<size_t>(write_cursor - stack_top) >= amount;
-        }
-
-        size_t* structure;
-        size_t* structure_end;
-        size_t* write_cursor;
-        size_t* stack_top;
-
-        friend class bounded_allocation;
-    };
-
-    /// \endcond
-
-    /// Uses an existing buffer to hold the parsed AST, if it fits.  The
-    /// specified buffer must not be deallocated until after the document
-    /// is parsed and the AST traversed.
-    bounded_allocation(size_t* existing_buffer_, size_t size_in_words)
-        : existing_buffer(existing_buffer_)
-        , existing_buffer_size(size_in_words) {}
-
-    /// Convenience wrapper for bounded_allocation(size_t*, size) that
-    /// automatically infers the size of the given array.
-    template <size_t N>
-    explicit bounded_allocation(size_t (&existing_buffer_)[N])
-        : bounded_allocation(existing_buffer_, N) {}
-
-    /// \cond INTERNAL
-
-    allocator
-    make_allocator(size_t input_document_size_in_bytes, bool* succeeded) const {
-        *succeeded = true;
-        return allocator(existing_buffer, existing_buffer_size);
+            return allocator(existing_buffer, input_document_size_in_bytes);
     }
 
     /// \endcond
@@ -1583,7 +994,7 @@ public:
         if (parse()) {
             size_t* ast_root = allocator.get_ast_root();
             return document(
-                input, allocator.transfer_ownership(), root_tag, ast_root);
+                input, root_tag, ast_root);
         } else {
             return document(
                 input, error_line, error_column, error_code, error_arg);
